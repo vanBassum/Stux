@@ -1,22 +1,64 @@
 import { useEffect, useRef, useState } from "react"
 import { backend, type UpdateStatus } from "@/lib/backend"
 import { useConnectionStatus } from "@/hooks/use-connection-status"
+import { useLatestRelease } from "@/hooks/use-latest-release"
+import { isNewerVersion } from "@/lib/version"
 import { PreReleaseBadge } from "@/components/PreReleaseBadge"
-import { UploadIcon } from "lucide-react"
+import { UploadIcon, ArrowUpCircleIcon, ExternalLinkIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 export default function FirmwarePage() {
   const connection = useConnectionStatus()
   const [status, setStatus] = useState<UpdateStatus | null>(null)
+  const release = useLatestRelease()
 
   useEffect(() => {
     if (connection !== "connected") return
     backend.getUpdateStatus().then(setStatus).catch(() => {})
   }, [connection])
 
+  const updateAvailable = status && release && isNewerVersion(status.firmware, release.version)
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <h1 className="text-2xl font-bold">Firmware</h1>
+
+      {updateAvailable && release && (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-6 shadow-sm">
+          <div className="flex items-center gap-2">
+            <ArrowUpCircleIcon className="size-5 text-emerald-500" />
+            <h2 className="text-lg font-semibold">Update Available</h2>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Version <span className="font-mono font-medium text-foreground">{release.version}</span> is available
+            (you have <span className="font-mono">{status!.firmware}</span>).
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {release.appUrl && (
+              <Button variant="outline" size="sm" asChild>
+                <a href={release.appUrl}>
+                  Download app.bin
+                  <ExternalLinkIcon className="ml-1.5 size-3" />
+                </a>
+              </Button>
+            )}
+            {release.wwwUrl && (
+              <Button variant="outline" size="sm" asChild>
+                <a href={release.wwwUrl}>
+                  Download www.bin
+                  <ExternalLinkIcon className="ml-1.5 size-3" />
+                </a>
+              </Button>
+            )}
+            <Button variant="outline" size="sm" asChild>
+              <a href={release.url} target="_blank" rel="noopener noreferrer">
+                Release notes
+                <ExternalLinkIcon className="ml-1.5 size-3" />
+              </a>
+            </Button>
+          </div>
+        </div>
+      )}
 
       {status && (
         <div className="rounded-xl border bg-card p-6 text-card-foreground shadow-sm">
@@ -31,6 +73,9 @@ export default function FirmwarePage() {
             </div>
             <Row label="Running" value={status.running} />
             <Row label="Next slot" value={status.nextSlot} />
+            {release && !updateAvailable && (
+              <Row label="Latest" value={`${release.version} (up to date)`} />
+            )}
           </div>
         </div>
       )}

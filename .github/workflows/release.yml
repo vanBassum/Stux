@@ -48,7 +48,7 @@ jobs:
             set -euo pipefail
             idf.py set-target ${{ env.IDF_TARGET }}
             idf.py build
-            idf.py merge-bin -o build/merged-factory.bin
+            cd build && esptool.py --chip ${{ env.IDF_TARGET }} merge_bin -o merged-factory.bin -f raw @flash_args
 
       - name: Prepare release artifacts
         run: |
