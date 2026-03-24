@@ -1,5 +1,6 @@
 #include "WebServerManager.h"
 #include "CommandManager.h"
+#include "LogManager.h"
 #include "UpdateManager.h"
 
 #include <unistd.h>
@@ -32,6 +33,13 @@ void WebServerManager::Init()
     MountFatPartition();
     StartServer();
     RegisterRoutes();
+
+    // Wire log broadcast to WS clients
+    serviceProvider_.getLogManager().SetBroadcastCallback(
+        [](const char* json, int32_t len, void* ctx) {
+            static_cast<WebServerManager*>(ctx)->Broadcast(json, len);
+        },
+        this);
 
     initAttempt.SetReady();
     ESP_LOGI(TAG, "Initialized");

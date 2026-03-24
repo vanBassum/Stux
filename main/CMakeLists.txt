@@ -10,6 +10,7 @@ set(SOURCE_FILES_LIST
     "Application/CommandManager/CommandManager.cpp"
     "Application/UpdateManager/UpdateManager.cpp"
     "Application/SettingsManager/SettingsManager.cpp"
+    "Application/LogManager/LogManager.cpp"
 )
 
 set(INCLUDE_DIRS_LIST
@@ -20,6 +21,7 @@ set(INCLUDE_DIRS_LIST
     "Application/CommandManager"
     "Application/UpdateManager"
     "Application/SettingsManager"
+    "Application/LogManager"
     "lib"
     "lib/common"
     "lib/rtos"

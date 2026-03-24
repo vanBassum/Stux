@@ -11,6 +11,7 @@ ApplicationContext g_appContext;
 extern "C" void app_main(void)
 {
     ESP_LOGI(TAG, "Starting up...");
+    g_appContext.getLogManager().Init();
     g_appContext.getSettingsManager().Init();
     g_appContext.getNetworkManager().Init();
     g_appContext.getCommandManager().Init();

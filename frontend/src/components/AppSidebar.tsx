@@ -1,4 +1,4 @@
-import { HomeIcon, SettingsIcon, DownloadIcon } from "lucide-react"
+import { HomeIcon, TerminalIcon, SettingsIcon, DownloadIcon } from "lucide-react"
 import {
   Sidebar,
   SidebarContent,
@@ -18,6 +18,7 @@ import { PreReleaseBadge } from "@/components/PreReleaseBadge"
 
 const navItems = [
   { title: "Home", icon: HomeIcon, page: "home" as const },
+  { title: "Console", icon: TerminalIcon, page: "console" as const },
   { title: "Settings", icon: SettingsIcon, page: "settings" as const },
   { title: "Firmware", icon: DownloadIcon, page: "firmware" as const },
 ]
@@ -82,7 +83,10 @@ export function AppSidebar({ currentPage, onNavigate }: AppSidebarProps) {
           {info && (
             <div className="mb-1.5 flex items-center justify-between">
               <span className="text-muted-foreground">Version</span>
-              <span className="font-mono">{info.firmware}</span>
+              <div className="flex items-center gap-1.5">
+                <PreReleaseBadge version={info.firmware} />
+                <span className="font-mono">{info.firmware}</span>
+              </div>
             </div>
           )}
           <div className="flex items-center justify-between">

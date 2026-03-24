@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react"
 import { backend, type UpdateStatus } from "@/lib/backend"
 import { useConnectionStatus } from "@/hooks/use-connection-status"
-import { useLatestRelease } from "@/hooks/use-latest-release"
+import { useLatestRelease, type ReleaseInfo } from "@/hooks/use-latest-release"
 import { isNewerVersion } from "@/lib/version"
 import { PreReleaseBadge } from "@/components/PreReleaseBadge"
-import { UploadIcon, ArrowUpCircleIcon, ExternalLinkIcon } from "lucide-react"
+import { UploadIcon, ArrowUpCircleIcon, ExternalLinkIcon, DownloadCloudIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 export default function FirmwarePage() {
@@ -24,40 +24,10 @@ export default function FirmwarePage() {
       <h1 className="text-2xl font-bold">Firmware</h1>
 
       {updateAvailable && release && (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-6 shadow-sm">
-          <div className="flex items-center gap-2">
-            <ArrowUpCircleIcon className="size-5 text-emerald-500" />
-            <h2 className="text-lg font-semibold">Update Available</h2>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Version <span className="font-mono font-medium text-foreground">{release.version}</span> is available
-            (you have <span className="font-mono">{status!.firmware}</span>).
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {release.appUrl && (
-              <Button variant="outline" size="sm" asChild>
-                <a href={release.appUrl}>
-                  Download app.bin
-                  <ExternalLinkIcon className="ml-1.5 size-3" />
-                </a>
-              </Button>
-            )}
-            {release.wwwUrl && (
-              <Button variant="outline" size="sm" asChild>
-                <a href={release.wwwUrl}>
-                  Download www.bin
-                  <ExternalLinkIcon className="ml-1.5 size-3" />
-                </a>
-              </Button>
-            )}
-            <Button variant="outline" size="sm" asChild>
-              <a href={release.url} target="_blank" rel="noopener noreferrer">
-                Release notes
-                <ExternalLinkIcon className="ml-1.5 size-3" />
-              </a>
-            </Button>
-          </div>
-        </div>
+        <UpdateAvailableCard
+          current={status!.firmware}
+          release={release}
+        />
       )}
 
       {status && (
@@ -96,6 +66,159 @@ export default function FirmwarePage() {
     </div>
   )
 }
+
+// ── Update available card with auto-update ───────────────────
+
+type AutoUpdateStage = "idle" | "downloading-app" | "uploading-app" | "downloading-www" | "uploading-www" | "rebooting" | "error"
+
+function UpdateAvailableCard({ current, release }: { current: string; release: ReleaseInfo }) {
+  const [stage, setStage] = useState<AutoUpdateStage>("idle")
+  const [progress, setProgress] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+
+  const busy = stage !== "idle" && stage !== "error"
+
+  async function handleAutoUpdate() {
+    if (!release.appUrl) {
+      setError("No app binary in this release")
+      setStage("error")
+      return
+    }
+
+    setError(null)
+
+    try {
+      // Download app binary from GitHub
+      setStage("downloading-app")
+      setProgress(0)
+      const appBlob = await downloadWithProgress(release.appUrl, setProgress)
+
+      // Upload app to device
+      setStage("uploading-app")
+      setProgress(0)
+      const appFile = new File([appBlob], "app.bin")
+      await backend.uploadFirmware(appFile, setProgress)
+
+      // Device will reboot after app upload
+      setStage("rebooting")
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Update failed")
+      setStage("error")
+    }
+  }
+
+  async function handleAutoUpdateWww() {
+    if (!release.wwwUrl) {
+      setError("No www binary in this release")
+      setStage("error")
+      return
+    }
+
+    setError(null)
+
+    try {
+      setStage("downloading-www")
+      setProgress(0)
+      const wwwBlob = await downloadWithProgress(release.wwwUrl, setProgress)
+
+      setStage("uploading-www")
+      setProgress(0)
+      const wwwFile = new File([wwwBlob], "www.bin")
+      await backend.uploadWww(wwwFile, setProgress)
+
+      setStage("rebooting")
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Update failed")
+      setStage("error")
+    }
+  }
+
+  const stageLabel: Record<AutoUpdateStage, string> = {
+    idle: "",
+    "downloading-app": "Downloading firmware...",
+    "uploading-app": "Uploading firmware to device...",
+    "downloading-www": "Downloading web interface...",
+    "uploading-www": "Uploading web interface to device...",
+    rebooting: "Rebooting device...",
+    error: "",
+  }
+
+  return (
+    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-6 shadow-sm">
+      <div className="flex items-center gap-2">
+        <ArrowUpCircleIcon className="size-5 text-emerald-500" />
+        <h2 className="text-lg font-semibold">Update Available</h2>
+      </div>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Version <span className="font-mono font-medium text-foreground">{release.version}</span> is available
+        (you have <span className="font-mono">{current}</span>).
+      </p>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {release.appUrl && (
+          <Button size="sm" onClick={handleAutoUpdate} disabled={busy}>
+            <DownloadCloudIcon className="mr-1.5 size-3.5" />
+            Update Firmware
+          </Button>
+        )}
+        {release.wwwUrl && (
+          <Button size="sm" variant="outline" onClick={handleAutoUpdateWww} disabled={busy}>
+            <DownloadCloudIcon className="mr-1.5 size-3.5" />
+            Update Web UI
+          </Button>
+        )}
+        <Button variant="outline" size="sm" asChild>
+          <a href={release.url} target="_blank" rel="noopener noreferrer">
+            Release notes
+            <ExternalLinkIcon className="ml-1.5 size-3" />
+          </a>
+        </Button>
+      </div>
+
+      {busy && (
+        <div className="mt-3">
+          <p className="mb-1 text-xs text-muted-foreground">{stageLabel[stage]} {progress}%</p>
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div className="h-full bg-emerald-500 transition-all" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <p className="mt-3 text-sm text-red-500">{error}</p>
+      )}
+    </div>
+  )
+}
+
+async function downloadWithProgress(url: string, onProgress: (pct: number) => void): Promise<Blob> {
+  const resp = await fetch(url)
+  if (!resp.ok) throw new Error(`Download failed: ${resp.status}`)
+
+  const contentLength = resp.headers.get("content-length")
+  if (!contentLength || !resp.body) {
+    // No content-length header — can't track progress, just download
+    onProgress(100)
+    return resp.blob()
+  }
+
+  const total = parseInt(contentLength, 10)
+  const reader = resp.body.getReader()
+  const chunks: Uint8Array[] = []
+  let received = 0
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    chunks.push(value)
+    received += value.length
+    onProgress(Math.round((received / total) * 100))
+  }
+
+  return new Blob(chunks as BlobPart[])
+}
+
+// ── Helpers ──────────────────────────────────────────────────
 
 function Row({ label, value }: { label: string; value: string }) {
   return (

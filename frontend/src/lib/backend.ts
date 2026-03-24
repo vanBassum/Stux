@@ -177,6 +177,10 @@ class BackendService {
     return this.send<DeviceInfo>("info")
   }
 
+  async getLogs(): Promise<LogsResponse> {
+    return this.send<LogsResponse>("getLogs")
+  }
+
   async getUpdateStatus(): Promise<UpdateStatus> {
     return this.send<UpdateStatus>("updateStatus")
   }
@@ -293,5 +297,9 @@ export interface WifiNetwork {
 export interface WifiScanResponse {
   ok: boolean
   networks: WifiNetwork[]
+}
+
+export interface LogsResponse {
+  lines: string[]
 }
 

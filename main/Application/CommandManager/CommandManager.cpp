@@ -1,4 +1,5 @@
 #include "CommandManager.h"
+#include "LogManager.h"
 #include "SettingsManager.h"
 #include "UpdateManager.h"
 #include "JsonWriter.h"
@@ -19,6 +20,7 @@ const CommandManager::CommandEntry CommandManager::commands_[] = {
     { "saveSettings",  &CommandManager::Cmd_SaveSettings },
     { "reboot",        &CommandManager::Cmd_Reboot },
     { "wifiScan",      &CommandManager::Cmd_WifiScan },
+    { "getLogs",       &CommandManager::Cmd_GetLogs },
     { nullptr, nullptr },
 };
 
@@ -171,4 +173,9 @@ void CommandManager::Cmd_WifiScan(const char* json, JsonWriter& resp)
     }
 
     resp.endArray();
+}
+
+void CommandManager::Cmd_GetLogs(const char* json, JsonWriter& resp)
+{
+    serviceProvider_.getLogManager().WriteHistory(resp);
 }
