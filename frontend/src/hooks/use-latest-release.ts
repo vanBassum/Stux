@@ -4,8 +4,6 @@ export interface ReleaseInfo {
   version: string
   tag: string
   url: string
-  appUrl: string | null
-  wwwUrl: string | null
 }
 
 const REPO = "vanBassum/ESPSkeleton"
@@ -19,15 +17,10 @@ export function useLatestRelease() {
       .then((data) => {
         if (!data?.tag_name) return
 
-        const version = data.tag_name.replace(/^v/, "")
-        const assets = data.assets as { name: string; browser_download_url: string }[]
-
         setRelease({
-          version,
+          version: data.tag_name.replace(/^v/, ""),
           tag: data.tag_name,
           url: data.html_url,
-          appUrl: assets.find((a) => a.name.endsWith("-app.bin"))?.browser_download_url ?? null,
-          wwwUrl: assets.find((a) => a.name.endsWith("-www.bin"))?.browser_download_url ?? null,
         })
       })
       .catch(() => {})
