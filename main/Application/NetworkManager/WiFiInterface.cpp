@@ -31,6 +31,12 @@ void WiFiInterface::Init()
         IP_EVENT, ESP_EVENT_ANY_ID, &WifiEventHandler, this, nullptr));
 }
 
+void WiFiInterface::SetHostname(const char* hostname)
+{
+    esp_netif_set_hostname(staNetif_, hostname);
+    esp_netif_set_hostname(apNetif_, hostname);
+}
+
 void WiFiInterface::ConnectSta(const char* ssid, const char* password)
 {
     ESP_LOGI(TAG, "Connecting to '%s'", ssid);

@@ -43,6 +43,15 @@ void NetworkManager::Init()
     wifi_interface_.SetEventHandler([this](const NetworkEvent& e) { HandleNetworkEvent(e); });
     wifi_interface_.Init();
 
+    // Set hostname so the device shows up by name on the router
+    auto& settings = serviceProvider_.getSettingsManager();
+    char hostname[32] = {};
+    settings.getString("device.name", hostname, sizeof(hostname));
+    if (hostname[0] != '\0')
+    {
+        wifi_interface_.SetHostname(hostname);
+    }
+
     // Setup connect timeout timer
     connectTimer_.Init("sta_timeout", pdMS_TO_TICKS(StaConnectTimeoutMs), false);
     connectTimer_.SetHandler([this]() {
@@ -66,7 +75,6 @@ void NetworkManager::Init()
     ESP_LOGI(TAG, "Initialized");
 
     // Load WiFi credentials from settings and try to connect
-    auto& settings = serviceProvider_.getSettingsManager();
     settings.getString("wifi.ssid", staSsid_, sizeof(staSsid_));
     settings.getString("wifi.password", staPassword_, sizeof(staPassword_));
 
