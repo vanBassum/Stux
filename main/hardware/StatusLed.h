@@ -35,7 +35,7 @@ public:
 
         SetGpio(false);
 
-        blinkTimer_.Init("status_led", true, 500);
+        blinkTimer_.Init("status_led", pdMS_TO_TICKS(500), true);
         blinkTimer_.SetHandler([this]() { Toggle(); });
     }
 
@@ -54,11 +54,11 @@ public:
             SetGpio(true);
             break;
         case Pattern::SlowBlink:
-            blinkTimer_.ChangePeriod(500);
+            blinkTimer_.SetPeriod(pdMS_TO_TICKS(500));
             blinkTimer_.Start();
             break;
         case Pattern::FastBlink:
-            blinkTimer_.ChangePeriod(100);
+            blinkTimer_.SetPeriod(pdMS_TO_TICKS(100));
             blinkTimer_.Start();
             break;
         }

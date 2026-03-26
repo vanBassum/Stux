@@ -5,6 +5,29 @@ import { SettingsIcon, SaveIcon, RotateCcwIcon, PowerIcon, SearchIcon, LockIcon 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
+// Group settings by prefix (e.g. "wifi.ssid" → "wifi", "mqtt.broker" → "mqtt")
+function groupSettings(settings: SettingEntry[]): { label: string; items: SettingEntry[] }[] {
+  const groups = new Map<string, SettingEntry[]>()
+  for (const s of settings) {
+    const dot = s.key.indexOf(".")
+    const prefix = dot > 0 ? s.key.slice(0, dot) : "general"
+    if (!groups.has(prefix)) groups.set(prefix, [])
+    groups.get(prefix)!.push(s)
+  }
+
+  const labels: Record<string, string> = {
+    wifi: "WiFi",
+    device: "Device",
+    mqtt: "MQTT",
+    ntp: "Time & NTP",
+  }
+
+  return [...groups.entries()].map(([prefix, items]) => ({
+    label: labels[prefix] ?? prefix.charAt(0).toUpperCase() + prefix.slice(1),
+    items,
+  }))
+}
+
 export default function SettingsPage() {
   const connection = useConnectionStatus()
   const [settings, setSettings] = useState<SettingEntry[]>([])
@@ -56,6 +79,8 @@ export default function SettingsPage() {
     }
   }
 
+  const groups = groupSettings(settings)
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-center justify-between">
@@ -72,26 +97,29 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border bg-card p-6 text-card-foreground shadow-sm">
-        <div className="mb-4 flex items-center gap-2">
-          <SettingsIcon className="size-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">Configuration</h2>
-        </div>
-
-        {settings.length === 0 ? (
+      {settings.length === 0 ? (
+        <div className="rounded-xl border bg-card p-6 text-card-foreground shadow-sm">
           <p className="text-sm text-muted-foreground">Loading...</p>
-        ) : (
-          <div className="space-y-4">
-            {settings.map((setting) => (
-              <SettingRow
-                key={setting.key}
-                setting={setting}
-                onChange={(value) => handleChange(setting.key, value)}
-              />
-            ))}
+        </div>
+      ) : (
+        groups.map((group) => (
+          <div key={group.label} className="rounded-xl border bg-card p-6 text-card-foreground shadow-sm">
+            <div className="mb-4 flex items-center gap-2">
+              <SettingsIcon className="size-5 text-muted-foreground" />
+              <h2 className="text-lg font-semibold">{group.label}</h2>
+            </div>
+            <div className="space-y-4">
+              {group.items.map((setting) => (
+                <SettingRow
+                  key={setting.key}
+                  setting={setting}
+                  onChange={(value) => handleChange(setting.key, value)}
+                />
+              ))}
+            </div>
           </div>
-        )}
-      </div>
+        ))
+      )}
 
       {dirty && (
         <p className="text-sm text-amber-500">
@@ -125,6 +153,13 @@ export default function SettingsPage() {
 
 // ── Setting row ──────────────────────────────────────────────
 
+const sensitiveKeys = ["password", "pass"]
+
+function isSensitive(key: string): boolean {
+  const field = key.split(".").pop() ?? ""
+  return sensitiveKeys.includes(field)
+}
+
 function SettingRow({
   setting,
   onChange,
@@ -133,6 +168,7 @@ function SettingRow({
   onChange: (value: string) => void
 }) {
   const isWifiSsid = setting.key === "wifi.ssid"
+  const isPassword = setting.type === "string" && isSensitive(setting.key)
 
   return (
     <div className="flex items-center justify-between gap-4">
@@ -154,7 +190,7 @@ function SettingRow({
       ) : (
         <Input
           className="w-48"
-          type={setting.type === "int" ? "number" : "text"}
+          type={isPassword ? "password" : setting.type === "int" ? "number" : "text"}
           defaultValue={String(setting.value)}
           onBlur={(e) => {
             if (e.target.value !== String(setting.value)) {

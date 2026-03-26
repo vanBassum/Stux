@@ -51,7 +51,7 @@ void MqttManager::Init()
 
     StartClient();
 
-    publishTimer_.Init("mqtt_pub", true, 30000);
+    publishTimer_.Init("mqtt_pub", pdMS_TO_TICKS(30000), true);
     publishTimer_.SetHandler([this]()
     {
         if (connected_)

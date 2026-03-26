@@ -89,19 +89,14 @@ Or use the included dev container (requires Docker + VS Code with the Dev Contai
 ### Build & Flash
 
 ```bash
-# Build the frontend
-cd frontend
-pnpm install
-pnpm build
-cd ..
-
-# Build and flash the firmware
 idf.py set-target esp32
 idf.py build
 idf.py -p /dev/ttyUSB0 flash monitor
 ```
 
-The frontend is compiled, gzipped, and embedded into a FAT partition on flash. No SD card or external storage needed.
+If [pnpm](https://pnpm.io/) is installed, the frontend is built automatically as part of `idf.py build`. The React app is compiled, gzipped, and embedded into a FAT partition on flash. No SD card or external storage needed.
+
+If pnpm is not available, the firmware still builds — you just won't have a web UI until you build the frontend manually (`cd frontend && pnpm install && pnpm build`) and reflash.
 
 ### Flash from Browser (no toolchain needed)
 
