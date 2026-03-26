@@ -53,6 +53,7 @@ set(COMPONENT_REQUIRES
     fatfs
     wear_levelling
     esp_driver_gpio
+    mdns
     espressif__mqtt
 )
 

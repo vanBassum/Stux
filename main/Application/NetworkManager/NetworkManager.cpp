@@ -3,6 +3,7 @@
 #include "nvs_flash.h"
 #include "esp_wifi.h"
 #include "esp_log.h"
+#include "mdns.h"
 
 NetworkManager::NetworkManager(ServiceProvider& serviceProvider)
     : serviceProvider_(serviceProvider)
@@ -43,14 +44,19 @@ void NetworkManager::Init()
     wifi_interface_.SetEventHandler([this](const NetworkEvent& e) { HandleNetworkEvent(e); });
     wifi_interface_.Init();
 
-    // Set hostname so the device shows up by name on the router
+    // Set hostname from device.name setting so it shows in the router
     auto& settings = serviceProvider_.getSettingsManager();
-    char hostname[32] = {};
-    settings.getString("device.name", hostname, sizeof(hostname));
-    if (hostname[0] != '\0')
-    {
-        wifi_interface_.SetHostname(hostname);
-    }
+    char deviceName[33] = {};
+    settings.getString("device.name", deviceName, sizeof(deviceName));
+    if (deviceName[0] == '\0')
+        strncpy(deviceName, "Strux", sizeof(deviceName) - 1);
+    wifi_interface_.SetHostname(deviceName);
+
+    // mDNS — <deviceName>.local
+    ESP_ERROR_CHECK(mdns_init());
+    mdns_hostname_set(deviceName);
+    mdns_instance_name_set(deviceName);
+    mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
 
     // Setup connect timeout timer
     connectTimer_.Init("sta_timeout", pdMS_TO_TICKS(StaConnectTimeoutMs), false);
@@ -58,7 +64,7 @@ void NetworkManager::Init()
         if (!staConnected_)
         {
             staRetryCount_++;
-            ESP_LOGW(TAG, "STA connect timeout (attempt %d/%d)", staRetryCount_, MaxStaRetries);
+            ESP_LOGW(TAG, "STA connect timeout (attempt %d/%d)", staRetryCount_.load(), MaxStaRetries);
 
             if (staRetryCount_ >= MaxStaRetries)
             {
@@ -111,7 +117,7 @@ void NetworkManager::AttemptStaConnect()
     }
 
     ESP_LOGI(TAG, "Attempting STA connection to '%s' (attempt %d/%d)",
-             staSsid_, staRetryCount_ + 1, MaxStaRetries);
+             staSsid_, staRetryCount_.load() + 1, MaxStaRetries);
 
     wifi_interface_.Stop();
     staConnected_ = false;
