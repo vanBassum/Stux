@@ -1,9 +1,15 @@
 import { useEffect, useRef, useState } from "react"
 import { backend, type SettingEntry, type WifiNetwork } from "@/lib/backend"
 import { useConnectionStatus } from "@/hooks/use-connection-status"
-import { SaveIcon, Undo2Icon, PowerIcon, SearchIcon, LockIcon, DownloadIcon, UploadIcon } from "lucide-react"
+import { SaveIcon, Undo2Icon, PowerIcon, SearchIcon, LockIcon, BracesIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Switch } from "@/components/ui/switch"
+import Editor from "react-simple-code-editor"
+import Prism from "prismjs"
+import "prismjs/components/prism-json"
+import "prismjs/themes/prism-tomorrow.css"
 
 // Group settings by prefix (e.g. "wifi.ssid" → "wifi", "mqtt.broker" → "mqtt")
 function groupSettings(settings: SettingEntry[]): { label: string; prefix: string; items: SettingEntry[] }[] {
@@ -71,6 +77,9 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [activePrefix, setActivePrefix] = useState<string | null>(null)
   const [search, setSearch] = useState("")
+  const [jsonOpen, setJsonOpen] = useState(false)
+  const [jsonText, setJsonText] = useState("")
+  const [jsonError, setJsonError] = useState("")
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -136,29 +145,23 @@ export default function SettingsPage() {
     }
   }
 
-  function handleExport() {
+  function openJsonEditor() {
     const obj: Record<string, unknown> = {}
     for (const s of settings) obj[s.key] = s.value
-    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = "strux-settings.json"
-    a.click()
-    URL.revokeObjectURL(url)
+    setJsonText(JSON.stringify(obj, null, 2))
+    setJsonError("")
+    setJsonOpen(true)
   }
 
-  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    e.target.value = ""
+  async function applyJson() {
     try {
-      const obj = JSON.parse(await file.text()) as Record<string, unknown>
+      const obj = JSON.parse(jsonText) as Record<string, unknown>
       for (const [key, value] of Object.entries(obj)) {
         await handleChange(key, String(value))
       }
+      setJsonOpen(false)
     } catch {
-      // ignore malformed file
+      setJsonError("Invalid JSON — fix the syntax and try again.")
     }
   }
 
@@ -191,6 +194,10 @@ export default function SettingsPage() {
             >
               <PowerIcon className="mr-1.5 size-3.5" />
               Reboot
+            </Button>
+            <Button variant="outline" size="sm" onClick={openJsonEditor}>
+              <BracesIcon className="mr-1.5 size-3.5" />
+              JSON
             </Button>
             <Button variant="outline" size="sm" onClick={handleReload}>
               <Undo2Icon className="mr-1.5 size-3.5" />
@@ -263,24 +270,35 @@ export default function SettingsPage() {
               <SettingsToc groups={filteredGroups} activePrefix={activePrefix} />
             </div>
 
-            <div className="flex shrink-0 gap-2">
-              <Button variant="outline" size="sm" className="flex-1" onClick={handleExport}>
-                <DownloadIcon className="mr-1.5 size-3.5" />
-                Export
-              </Button>
-              <label className="flex-1">
-                <Button variant="outline" size="sm" className="w-full" asChild>
-                  <span>
-                    <UploadIcon className="mr-1.5 size-3.5" />
-                    Import
-                  </span>
-                </Button>
-                <input type="file" accept=".json" className="hidden" onChange={handleImport} />
-              </label>
-            </div>
           </aside>
         )}
       </div>
+
+      {/* JSON editor modal */}
+      <Dialog open={jsonOpen} onOpenChange={setJsonOpen}>
+        <DialogContent className="flex h-[80vh] max-w-3xl flex-col">
+          <DialogHeader>
+            <DialogTitle>Edit Settings as JSON</DialogTitle>
+          </DialogHeader>
+
+          <div className="min-h-0 flex-1 overflow-auto rounded-lg border bg-neutral-950 font-mono text-sm">
+            <Editor
+              value={jsonText}
+              onValueChange={(v) => { setJsonText(v); setJsonError("") }}
+              highlight={(code) => Prism.highlight(code, Prism.languages.json, "json")}
+              padding={16}
+              style={{ minHeight: "100%" }}
+            />
+          </div>
+
+          {jsonError && <p className="text-sm text-destructive">{jsonError}</p>}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setJsonOpen(false)}>Cancel</Button>
+            <Button onClick={applyJson}>Apply</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -312,13 +330,10 @@ function SettingRow({
       </div>
 
       {setting.type === "bool" ? (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onChange(setting.value ? "false" : "true")}
-        >
-          {setting.value ? "On" : "Off"}
-        </Button>
+        <Switch
+          checked={Boolean(setting.value)}
+          onCheckedChange={(checked) => onChange(checked ? "true" : "false")}
+        />
       ) : isWifiSsid ? (
         <WifiSsidInput value={String(setting.value)} onChange={onChange} />
       ) : (
