@@ -1,6 +1,7 @@
 #include "CommandManager.h"
 #include "ConsoleManager.h"
 #include "SettingsManager.h"
+#include "SettingsDefs.h"
 #include "UpdateManager.h"
 #include "JsonWriter.h"
 #include "JsonHelpers.h"
@@ -8,6 +9,8 @@
 #include "esp_app_desc.h"
 #include "esp_system.h"
 #include "esp_heap_caps.h"
+#include "esp_partition.h"
+#include "esp_ota_ops.h"
 #include "NetworkManager.h"
 #include <cstring>
 
@@ -21,6 +24,7 @@ const CommandManager::CommandEntry CommandManager::commands_[] = {
     { "reboot",       &CommandManager::Cmd_Reboot,       true  },
     { "wifiScan",     &CommandManager::Cmd_WifiScan,     false },
     { "getLogs",      &CommandManager::Cmd_GetLogs,      false },
+    { "partitions",   &CommandManager::Cmd_Partitions,   false },
     { nullptr, nullptr, false },
 };
 
@@ -62,7 +66,7 @@ bool CommandManager::Execute(const char* type, const char* json, JsonWriter& res
 bool CommandManager::CheckAuth(const char* json, JsonWriter& resp)
 {
     char storedPin[64] = {};
-    serviceProvider_.getSettingsManager().getString("device.pin", storedPin, sizeof(storedPin));
+    serviceProvider_.getSettingsManager().getString(Settings::Device::Pin, storedPin, sizeof(storedPin));
 
     // No PIN configured — auth disabled
     if (storedPin[0] == '\0')
@@ -143,13 +147,13 @@ void CommandManager::Cmd_SetSetting(const char* json, JsonWriter& resp)
             switch (defs[i].type)
             {
             case SettingType::String:
-                settings.setString(key, value);
+                settings.setString(defs[i].key, value);
                 break;
             case SettingType::Int:
-                settings.setInt(key, atoi(value));
+                settings.setInt(defs[i].key, atoi(value));
                 break;
             case SettingType::Bool:
-                settings.setBool(key, strcmp(value, "true") == 0 || strcmp(value, "1") == 0);
+                settings.setBool(defs[i].key, strcmp(value, "true") == 0 || strcmp(value, "1") == 0);
                 break;
             }
 
@@ -202,4 +206,86 @@ void CommandManager::Cmd_WifiScan(const char* json, JsonWriter& resp)
 void CommandManager::Cmd_GetLogs(const char* json, JsonWriter& resp)
 {
     serviceProvider_.getConsoleManager().WriteHistory(resp);
+}
+
+void CommandManager::Cmd_Partitions(const char* json, JsonWriter& resp)
+{
+    const esp_partition_t* running = esp_ota_get_running_partition();
+    const esp_partition_t* nextOta = esp_ota_get_next_update_partition(nullptr);
+
+    resp.fieldArray("partitions");
+
+    esp_partition_iterator_t it = esp_partition_find(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, nullptr);
+    for (; it != nullptr; it = esp_partition_next(it))
+    {
+        const esp_partition_t* p = esp_partition_get(it);
+        if (!p) continue;
+
+        resp.beginObject();
+        resp.field("label", p->label);
+
+        // Type
+        const char* typeStr = p->type == ESP_PARTITION_TYPE_APP  ? "app"
+                            : p->type == ESP_PARTITION_TYPE_DATA ? "data"
+                            : "unknown";
+        resp.field("type", typeStr);
+
+        // Subtype
+        char subtypeStr[16] = {};
+        if (p->type == ESP_PARTITION_TYPE_APP)
+        {
+            if (p->subtype == ESP_PARTITION_SUBTYPE_APP_FACTORY)
+                snprintf(subtypeStr, sizeof(subtypeStr), "factory");
+            else
+                snprintf(subtypeStr, sizeof(subtypeStr), "ota_%d",
+                         p->subtype - ESP_PARTITION_SUBTYPE_APP_OTA_0);
+        }
+        else if (p->type == ESP_PARTITION_TYPE_DATA)
+        {
+            switch (p->subtype)
+            {
+            case ESP_PARTITION_SUBTYPE_DATA_OTA:    snprintf(subtypeStr, sizeof(subtypeStr), "ota");    break;
+            case ESP_PARTITION_SUBTYPE_DATA_PHY:    snprintf(subtypeStr, sizeof(subtypeStr), "phy");    break;
+            case ESP_PARTITION_SUBTYPE_DATA_NVS:    snprintf(subtypeStr, sizeof(subtypeStr), "nvs");    break;
+            case ESP_PARTITION_SUBTYPE_DATA_FAT:    snprintf(subtypeStr, sizeof(subtypeStr), "fat");    break;
+            case ESP_PARTITION_SUBTYPE_DATA_SPIFFS: snprintf(subtypeStr, sizeof(subtypeStr), "spiffs"); break;
+            default: snprintf(subtypeStr, sizeof(subtypeStr), "data_%d", p->subtype);                   break;
+            }
+        }
+        else
+        {
+            snprintf(subtypeStr, sizeof(subtypeStr), "%d", p->subtype);
+        }
+        resp.field("subtype", subtypeStr);
+
+        resp.field("offset", static_cast<uint32_t>(p->address));
+        resp.field("size",   static_cast<uint32_t>(p->size));
+        resp.field("running", p == running);
+        resp.field("nextOta", p == nextOta);
+
+        bool uploadable =
+            (p->type == ESP_PARTITION_TYPE_APP &&
+             p->subtype >= ESP_PARTITION_SUBTYPE_APP_OTA_0 &&
+             p != running)
+            ||
+            (p->type == ESP_PARTITION_TYPE_DATA &&
+             p->subtype == ESP_PARTITION_SUBTYPE_DATA_FAT &&
+             strcmp(p->label, "www") == 0);
+        resp.field("uploadable", uploadable);
+
+        // Version string for app partitions
+        char version[32] = {};
+        if (p->type == ESP_PARTITION_TYPE_APP)
+        {
+            esp_app_desc_t desc = {};
+            if (esp_ota_get_partition_description(p, &desc) == ESP_OK)
+                strncpy(version, desc.version, sizeof(version) - 1);
+        }
+        resp.field("version", version);
+
+        resp.endObject();
+    }
+    esp_partition_iterator_release(it);
+
+    resp.endArray();
 }

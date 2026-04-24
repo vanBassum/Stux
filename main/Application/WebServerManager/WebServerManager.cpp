@@ -7,6 +7,8 @@
 #include <esp_log.h>
 #include <esp_vfs_fat.h>
 #include <esp_system.h>
+#include <esp_partition.h>
+#include <cstdlib>
 
 static constexpr const char* TAG = "WebServerManager";
 static constexpr const char* BASE_PATH = "/www";
@@ -115,6 +117,17 @@ void WebServerManager::RegisterRoutes()
         .supported_subprotocol = nullptr,
     };
     httpd_register_uri_handler(server_, &upload_www);
+
+    const httpd_uri_t download = {
+        .uri = "/api/download",
+        .method = HTTP_GET,
+        .handler = HandleDownload,
+        .user_ctx = this,
+        .is_websocket = false,
+        .handle_ws_control_frames = false,
+        .supported_subprotocol = nullptr,
+    };
+    httpd_register_uri_handler(server_, &download);
 
     wsHandler_.RegisterRoute(server_);
     staticFileHandler_.RegisterRoute(server_, BASE_PATH);
@@ -237,5 +250,58 @@ esp_err_t WebServerManager::HandleUploadWww(httpd_req_t* req)
     vTaskDelay(pdMS_TO_TICKS(1000));
     esp_restart();
 
+    return ESP_OK;
+}
+
+esp_err_t WebServerManager::HandleDownload(httpd_req_t* req)
+{
+    char query[64] = {};
+    char label[32] = {};
+
+    if (httpd_req_get_url_query_len(req) == 0 ||
+        httpd_req_get_url_query_str(req, query, sizeof(query)) != ESP_OK ||
+        httpd_query_key_value(query, "partition", label, sizeof(label)) != ESP_OK)
+    {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "missing ?partition=");
+        return ESP_FAIL;
+    }
+
+    const esp_partition_t* p = esp_partition_find_first(
+        ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, label);
+    if (!p)
+    {
+        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "partition not found");
+        return ESP_FAIL;
+    }
+
+    char disp[64];
+    snprintf(disp, sizeof(disp), "attachment; filename=\"%s.bin\"", label);
+    httpd_resp_set_type(req, "application/octet-stream");
+    httpd_resp_set_hdr(req, "Content-Disposition", disp);
+
+    static constexpr size_t CHUNK = 4096;
+    void* buf = malloc(CHUNK);
+    if (!buf)
+    {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "out of memory");
+        return ESP_FAIL;
+    }
+
+    size_t offset = 0;
+    while (offset < p->size)
+    {
+        size_t toRead = (p->size - offset < CHUNK) ? p->size - offset : CHUNK;
+        if (esp_partition_read(p, offset, buf, toRead) != ESP_OK)
+        {
+            free(buf);
+            httpd_resp_send_chunk(req, nullptr, 0);
+            return ESP_FAIL;
+        }
+        httpd_resp_send_chunk(req, static_cast<const char*>(buf), toRead);
+        offset += toRead;
+    }
+
+    free(buf);
+    httpd_resp_send_chunk(req, nullptr, 0);
     return ESP_OK;
 }

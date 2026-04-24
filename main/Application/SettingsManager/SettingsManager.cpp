@@ -94,19 +94,19 @@ void SettingsManager::ApplyDefaults()
 // Typed access
 // ──────────────────────────────────────────────────────────────
 
-bool SettingsManager::getString(const char* key, char* out, size_t maxLen) const
+bool SettingsManager::getString(SettingKey key, char* out, size_t maxLen) const
 {
     if (!handle_) return false;
     return handle_->get_string(key, out, maxLen) == ESP_OK;
 }
 
-bool SettingsManager::setString(const char* key, const char* value)
+bool SettingsManager::setString(SettingKey key, const char* value)
 {
     if (!handle_) return false;
     return handle_->set_string(key, value) == ESP_OK;
 }
 
-int32_t SettingsManager::getInt(const char* key, int32_t defaultVal) const
+int32_t SettingsManager::getInt(SettingKey key, int32_t defaultVal) const
 {
     if (!handle_) return defaultVal;
     int32_t val = defaultVal;
@@ -114,13 +114,13 @@ int32_t SettingsManager::getInt(const char* key, int32_t defaultVal) const
     return val;
 }
 
-bool SettingsManager::setInt(const char* key, int32_t value)
+bool SettingsManager::setInt(SettingKey key, int32_t value)
 {
     if (!handle_) return false;
     return handle_->set_item(key, value) == ESP_OK;
 }
 
-bool SettingsManager::getBool(const char* key, bool defaultVal) const
+bool SettingsManager::getBool(SettingKey key, bool defaultVal) const
 {
     if (!handle_) return defaultVal;
     uint8_t val = defaultVal ? 1 : 0;
@@ -128,7 +128,7 @@ bool SettingsManager::getBool(const char* key, bool defaultVal) const
     return val != 0;
 }
 
-bool SettingsManager::setBool(const char* key, bool value)
+bool SettingsManager::setBool(SettingKey key, bool value)
 {
     if (!handle_) return false;
     return handle_->set_item<uint8_t>(key, value ? 1 : 0) == ESP_OK;

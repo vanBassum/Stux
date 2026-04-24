@@ -10,10 +10,18 @@ class JsonWriter;
 // Setting definition table
 // ──────────────────────────────────────────────────────────────
 
+// Opaque key type — construct only from predefined Settings:: constants.
+// Implicit const char* conversion lets the NVS layer use it transparently.
+struct SettingKey {
+    const char* key;
+    constexpr explicit SettingKey(const char* k) : key(k) {}
+    constexpr operator const char*() const { return key; }
+};
+
 enum class SettingType : uint8_t { String, Int, Bool };
 
 struct SettingDef {
-    const char* key;
+    SettingKey  key;
     SettingType type;
     const char* label;       // human-readable name for the frontend
     const char* strDefault;  // default for String (also "true"/"false" for Bool, number string for Int)
@@ -37,14 +45,14 @@ public:
 
     // ── Typed access ─────────────────────────────────────────
 
-    bool getString(const char* key, char* out, size_t maxLen) const;
-    bool setString(const char* key, const char* value);
+    bool getString(SettingKey key, char* out, size_t maxLen) const;
+    bool setString(SettingKey key, const char* value);
 
-    int32_t getInt(const char* key, int32_t defaultVal = 0) const;
-    bool setInt(const char* key, int32_t value);
+    int32_t getInt(SettingKey key, int32_t defaultVal = 0) const;
+    bool setInt(SettingKey key, int32_t value);
 
-    bool getBool(const char* key, bool defaultVal = false) const;
-    bool setBool(const char* key, bool value);
+    bool getBool(SettingKey key, bool defaultVal = false) const;
+    bool setBool(SettingKey key, bool value);
 
     // ── Persistence ──────────────────────────────────────────
 

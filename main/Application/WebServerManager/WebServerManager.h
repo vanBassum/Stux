@@ -36,4 +36,5 @@ private:
 
     static esp_err_t HandleUploadApp(httpd_req_t* req);
     static esp_err_t HandleUploadWww(httpd_req_t* req);
+    static esp_err_t HandleDownload(httpd_req_t* req);
 };

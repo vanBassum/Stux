@@ -1,191 +1,198 @@
 import { useEffect, useRef, useState } from "react"
-import { backend, type UpdateStatus } from "@/lib/backend"
+import { backend, type Partition } from "@/lib/backend"
 import { useConnectionStatus } from "@/hooks/use-connection-status"
-import { useLatestRelease, type ReleaseInfo } from "@/hooks/use-latest-release"
-import { isNewerVersion } from "@/lib/version"
-import { PreReleaseBadge } from "@/components/PreReleaseBadge"
-import { UploadIcon, ArrowUpCircleIcon, ExternalLinkIcon } from "lucide-react"
+import { UploadIcon, DownloadIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+
+function fmtSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${bytes} B`
+}
+
+function chooseUploadFn(p: Partition) {
+  if (!p.uploadable) return null
+  if (p.type === "app") return (file: File, onProgress: (n: number) => void) => backend.uploadFirmware(file, onProgress)
+  if (p.label === "www") return (file: File, onProgress: (n: number) => void) => backend.uploadWww(file, onProgress)
+  return null
+}
 
 export default function FirmwarePage() {
   const connection = useConnectionStatus()
-  const [status, setStatus] = useState<UpdateStatus | null>(null)
-  const release = useLatestRelease()
+  const [partitions, setPartitions] = useState<Partition[] | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [restartPending, setRestartPending] = useState(false)
+
+  function refresh() {
+    backend
+      .getPartitions()
+      .then((r) => { setPartitions(r.partitions); setLoadError(null) })
+      .catch((e) => setLoadError(e instanceof Error ? e.message : "Unknown error"))
+  }
 
   useEffect(() => {
     if (connection !== "connected") return
-    backend.getUpdateStatus().then(setStatus).catch(() => {})
+    refresh()
   }, [connection])
-
-  const updateAvailable = status && release && isNewerVersion(status.firmware, release.version)
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <h1 className="text-2xl font-bold">Firmware</h1>
 
-      {updateAvailable && release && (
-        <UpdateAvailableCard
-          current={status!.firmware}
-          release={release}
-        />
-      )}
-
-      {status && (
-        <div className="rounded-xl border bg-card p-6 text-card-foreground shadow-sm">
-          <h2 className="mb-3 text-lg font-semibold">Current Status</h2>
-          <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Version</span>
-              <span className="flex items-center gap-2 font-mono">
-                {status.firmware}
-                <PreReleaseBadge version={status.firmware} />
-              </span>
-            </div>
-            <Row label="Running" value={status.running} />
-            <Row label="Next slot" value={status.nextSlot} />
-            {release && !updateAvailable && (
-              <Row label="Latest" value={`${release.version} (up to date)`} />
-            )}
-          </div>
+      {restartPending && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-600 dark:text-amber-400">
+          Upload complete — reboot the device to apply the update.
         </div>
       )}
 
-      <UploadCard
-        title="Application Firmware"
-        description="Upload a .bin file to update the application firmware. The device will reboot after upload."
-        accept=".bin"
-        onUpload={(file, onProgress) => backend.uploadFirmware(file, onProgress)}
-      />
+      <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
+        <div className="border-b p-4">
+          <h2 className="text-lg font-semibold">Partitions</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Upload targets non-running OTA slots and the www FAT image. Download is always available.
+          </p>
+        </div>
 
-      <UploadCard
-        title="WWW Partition"
-        description="Upload a FAT image to update the web interface. The device will reboot after upload."
-        accept=".bin"
-        onUpload={(file, onProgress) => backend.uploadWww(file, onProgress)}
-      />
-    </div>
-  )
-}
-
-// ── Update notification ──────────────────────────────────────
-
-function UpdateAvailableCard({ current, release }: { current: string; release: ReleaseInfo }) {
-  return (
-    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-6 shadow-sm">
-      <div className="flex items-center gap-2">
-        <ArrowUpCircleIcon className="size-5 text-emerald-500" />
-        <h2 className="text-lg font-semibold">Update Available</h2>
-      </div>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Version <span className="font-mono font-medium text-foreground">{release.version}</span> is available
-        (you have <span className="font-mono">{current}</span>).
-        Download the binaries from GitHub and upload them below.
-      </p>
-
-      <div className="mt-3">
-        <Button variant="outline" size="sm" asChild>
-          <a href={release.url} target="_blank" rel="noopener noreferrer">
-            Go to release
-            <ExternalLinkIcon className="ml-1.5 size-3" />
-          </a>
-        </Button>
+        {partitions ? (
+          <ul className="divide-y">
+            {partitions.map((p) => (
+              <PartitionRow
+                key={p.label}
+                partition={p}
+                onAfterUpload={() => {
+                  setRestartPending(true)
+                  refresh()
+                }}
+              />
+            ))}
+          </ul>
+        ) : loadError ? (
+          <p className="p-6 text-sm text-red-500">Failed to load partitions: {loadError}</p>
+        ) : (
+          <p className="p-6 text-sm text-muted-foreground">Loading...</p>
+        )}
       </div>
     </div>
   )
 }
 
-// ── Helpers ──────────────────────────────────────────────────
+// ── Badge ─────────────────────────────────────────────────────
 
-function Row({ label, value }: { label: string; value: string }) {
+function Badge({ children, tone }: { children: React.ReactNode; tone: "emerald" | "sky" }) {
+  const cls =
+    tone === "emerald"
+      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+      : "border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400"
   return (
-    <div className="flex justify-between">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-mono">{value}</span>
-    </div>
+    <span
+      className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}
+    >
+      {children}
+    </span>
   )
 }
 
-function UploadCard({
-  title,
-  description,
-  accept,
-  onUpload,
+// ── Partition row ─────────────────────────────────────────────
+
+function PartitionRow({
+  partition,
+  onAfterUpload,
 }: {
-  title: string
-  description: string
-  accept: string
-  onUpload: (
-    file: File,
-    onProgress: (percent: number) => void,
-  ) => Promise<unknown>
+  partition: Partition
+  onAfterUpload: () => void
 }) {
+  const p = partition
   const fileRef = useRef<HTMLInputElement>(null)
-  const [file, setFile] = useState<File | null>(null)
   const [progress, setProgress] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const uploadFn = chooseUploadFn(p)
+  const canUpload = !!uploadFn && !p.running
   const uploading = progress !== null
 
-  async function handleUpload() {
-    if (!file) return
+  async function onFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file || !uploadFn) return
+
     setError(null)
     setProgress(0)
-
     try {
-      await onUpload(file, setProgress)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed")
+      await uploadFn(file, setProgress)
+      onAfterUpload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed")
+    } finally {
       setProgress(null)
     }
   }
 
   return (
-    <div className="rounded-xl border bg-card p-6 text-card-foreground shadow-sm">
-      <div className="mb-2 flex items-center gap-2">
-        <UploadIcon className="size-5 text-muted-foreground" />
-        <h2 className="text-lg font-semibold">{title}</h2>
-      </div>
-      <p className="mb-4 text-sm text-muted-foreground">{description}</p>
+    <li className="p-4">
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-mono font-medium">{p.label}</span>
+            {p.running && <Badge tone="emerald">running</Badge>}
+            {p.nextOta && <Badge tone="sky">next OTA</Badge>}
+            {p.version && (
+              <span className="font-mono text-xs text-muted-foreground">v{p.version}</span>
+            )}
+          </div>
+          <div className="mt-0.5 font-mono text-xs text-muted-foreground">
+            {p.type}/{p.subtype} · 0x{p.offset.toString(16)} · {fmtSize(p.size)}
+          </div>
+        </div>
 
-      <div className="flex items-center gap-3">
-        <input
-          ref={fileRef}
-          type="file"
-          accept={accept}
-          disabled={uploading}
-          className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/80 disabled:opacity-50"
-          onChange={(e) => {
-            setFile(e.target.files?.[0] ?? null)
-            setError(null)
-          }}
-        />
-        <Button
-          onClick={handleUpload}
-          disabled={!file || uploading}
-          size="sm"
-        >
-          {uploading ? `${progress}%` : "Upload"}
-        </Button>
+        <div className="flex shrink-0 gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".bin"
+            className="hidden"
+            onChange={onFileChosen}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!canUpload || uploading}
+            onClick={() => fileRef.current?.click()}
+            title={
+              !uploadFn
+                ? "This partition can't be updated over HTTP"
+                : p.running
+                  ? "Cannot overwrite the running slot"
+                  : "Upload a .bin file"
+            }
+          >
+            <UploadIcon className="mr-1.5 size-3.5" />
+            Upload
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <a href={backend.partitionDownloadUrl(p.label)} download={`${p.label}.bin`}>
+              <DownloadIcon className="mr-1.5 size-3.5" />
+              Download
+            </a>
+          </Button>
+        </div>
       </div>
-
-      {file && !uploading && (
-        <p className="mt-2 text-xs text-muted-foreground">
-          {file.name} ({(file.size / 1024).toFixed(1)} KB)
-        </p>
-      )}
 
       {uploading && (
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full bg-primary transition-all"
-            style={{ width: `${progress}%` }}
-          />
+        <div className="mt-3">
+          <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+            <span>Uploading…</span>
+            <span>{progress}%</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full bg-primary transition-all"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
         </div>
       )}
 
-      {error && (
-        <p className="mt-2 text-sm text-red-500">{error}</p>
-      )}
-    </div>
+      {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
+    </li>
   )
 }

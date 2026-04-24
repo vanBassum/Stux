@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { backend, type SettingEntry, type WifiNetwork } from "@/lib/backend"
 import { useConnectionStatus } from "@/hooks/use-connection-status"
-import { SettingsIcon, SaveIcon, RotateCcwIcon, PowerIcon, SearchIcon, LockIcon } from "lucide-react"
+import { SaveIcon, RotateCcwIcon, PowerIcon, SearchIcon, LockIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -98,17 +98,16 @@ export default function SettingsPage() {
       </div>
 
       {settings.length === 0 ? (
-        <div className="rounded-xl border bg-card p-6 text-card-foreground shadow-sm">
-          <p className="text-sm text-muted-foreground">Loading...</p>
+        <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
+          <p className="p-6 text-sm text-muted-foreground">Loading...</p>
         </div>
       ) : (
         groups.map((group) => (
-          <div key={group.label} className="rounded-xl border bg-card p-6 text-card-foreground shadow-sm">
-            <div className="mb-4 flex items-center gap-2">
-              <SettingsIcon className="size-5 text-muted-foreground" />
+          <div key={group.label} className="rounded-xl border bg-card text-card-foreground shadow-sm">
+            <div className="border-b p-4">
               <h2 className="text-lg font-semibold">{group.label}</h2>
             </div>
-            <div className="space-y-4">
+            <ul className="divide-y">
               {group.items.map((setting) => (
                 <SettingRow
                   key={setting.key}
@@ -116,7 +115,7 @@ export default function SettingsPage() {
                   onChange={(value) => handleChange(setting.key, value)}
                 />
               ))}
-            </div>
+            </ul>
           </div>
         ))
       )}
@@ -171,10 +170,10 @@ function SettingRow({
   const isPassword = setting.type === "string" && isSensitive(setting.key)
 
   return (
-    <div className="flex items-center justify-between gap-4">
+    <li className="flex items-center justify-between gap-4 p-4">
       <div className="min-w-0">
         <div className="text-sm font-medium">{setting.label}</div>
-        <div className="text-xs text-muted-foreground font-mono">{setting.key}</div>
+        <div className="font-mono text-xs text-muted-foreground">{setting.key}</div>
       </div>
 
       {setting.type === "bool" ? (
@@ -204,7 +203,7 @@ function SettingRow({
           }}
         />
       )}
-    </div>
+    </li>
   )
 }
 

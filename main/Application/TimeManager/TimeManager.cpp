@@ -1,5 +1,6 @@
 #include "TimeManager.h"
 #include "SettingsManager/SettingsManager.h"
+#include "SettingsManager/SettingsDefs.h"
 #include "esp_log.h"
 #include "esp_netif_sntp.h"
 #include <ctime>
@@ -30,7 +31,7 @@ void TimeManager::Init()
 void TimeManager::ApplyTimezone()
 {
     char tz[64] = {};
-    settingsManager.getString("ntp.timezone", tz, sizeof(tz));
+    settingsManager.getString(Settings::Ntp::Timezone, tz, sizeof(tz));
 
     if (tz[0] != '\0')
     {
@@ -48,7 +49,7 @@ void TimeManager::ApplyTimezone()
 
 void TimeManager::LoadServerName()
 {
-    if (!settingsManager.getString("ntp.server", ntpServer, sizeof(ntpServer)) || ntpServer[0] == '\0')
+    if (!settingsManager.getString(Settings::Ntp::Server, ntpServer, sizeof(ntpServer)) || ntpServer[0] == '\0')
         snprintf(ntpServer, sizeof(ntpServer), "pool.ntp.org");
 }
 
