@@ -71,6 +71,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [activePrefix, setActivePrefix] = useState<string | null>(null)
   const [search, setSearch] = useState("")
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (connection !== "connected") return
@@ -81,7 +82,8 @@ export default function SettingsPage() {
   }, [connection])
 
   useEffect(() => {
-    if (settings.length === 0) return
+    if (settings.length === 0 || !scrollRef.current) return
+    const root = scrollRef.current
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
@@ -91,9 +93,9 @@ export default function SettingsPage() {
           }
         }
       },
-      { rootMargin: "-20% 0px -70% 0px" },
+      { root, rootMargin: "-20% 0px -70% 0px" },
     )
-    document.querySelectorAll<HTMLElement>("[data-prefix]").forEach((el) => observer.observe(el))
+    root.querySelectorAll<HTMLElement>("[data-prefix]").forEach((el) => observer.observe(el))
     return () => observer.disconnect()
   }, [settings])
 
@@ -175,9 +177,9 @@ export default function SettingsPage() {
     : groups
 
   return (
-    <div className="mx-auto max-w-5xl">
-      {/* Sticky header — spans full width */}
-      <div className="sticky top-0 z-10 bg-background pb-2">
+    <div className="mx-auto flex h-full max-w-5xl flex-col">
+      {/* Header */}
+      <div className="shrink-0 pb-4">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Settings</h1>
           <div className="flex gap-2">
@@ -202,77 +204,79 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="flex gap-12">
-        {/* Main settings content */}
-        <div className="min-w-0 flex-1 space-y-6 py-6">
-          {settings.length === 0 ? (
-            <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
-              <p className="p-6 text-sm text-muted-foreground">Loading...</p>
-            </div>
-          ) : filteredGroups.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No settings match "{search}".</p>
-          ) : (
-            filteredGroups.map((group) => (
-              <div
-                key={group.prefix}
-                id={`settings-${group.prefix}`}
-                data-prefix={group.prefix}
-                className="rounded-xl border bg-card text-card-foreground shadow-sm"
-              >
-                <div className="border-b p-4">
-                  <h2 className="text-lg font-semibold">{group.label}</h2>
-                </div>
-                <ul className="divide-y">
-                  {group.items.map((setting) => (
-                    <SettingRow
-                      key={setting.key}
-                      setting={setting}
-                      onChange={(value) => handleChange(setting.key, value)}
-                    />
-                  ))}
-                </ul>
+      <div className="flex min-h-0 flex-1 gap-12">
+        {/* Main settings — scrollable */}
+        <div ref={scrollRef} className="min-w-0 flex-1 overflow-y-auto">
+          <div className="space-y-6 pb-6">
+            {settings.length === 0 ? (
+              <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
+                <p className="p-6 text-sm text-muted-foreground">Loading...</p>
               </div>
-            ))
-          )}
+            ) : filteredGroups.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No settings match "{search}".</p>
+            ) : (
+              filteredGroups.map((group) => (
+                <div
+                  key={group.prefix}
+                  id={`settings-${group.prefix}`}
+                  data-prefix={group.prefix}
+                  className="rounded-xl border bg-card text-card-foreground shadow-sm"
+                >
+                  <div className="border-b p-4">
+                    <h2 className="text-lg font-semibold">{group.label}</h2>
+                  </div>
+                  <ul className="divide-y">
+                    {group.items.map((setting) => (
+                      <SettingRow
+                        key={setting.key}
+                        setting={setting}
+                        onChange={(value) => handleChange(setting.key, value)}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              ))
+            )}
 
-          {dirty && (
-            <p className="text-sm text-amber-500">
-              You have unsaved changes. Press Save to write them to flash.
-            </p>
-          )}
+            {dirty && (
+              <p className="text-sm text-amber-500">
+                You have unsaved changes. Press Save to write them to flash.
+              </p>
+            )}
+          </div>
         </div>
 
-        {/* Sidebar — only visible on wide screens */}
+        {/* Sidebar — only on wide screens */}
         {groups.length > 0 && (
-          <aside className="hidden w-48 shrink-0 xl:block">
-            <div className="sticky top-14 space-y-4 pt-6">
-              <div className="relative">
-                <SearchIcon className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
-                <Input
-                  className="pl-8 text-sm"
-                  placeholder="Search…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
+          <aside className="hidden w-48 shrink-0 xl:flex xl:flex-col xl:gap-4">
+            <div className="relative shrink-0">
+              <SearchIcon className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+              <Input
+                className="pl-8 text-sm"
+                placeholder="Search…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
 
+            <div className="min-h-0 flex-1 overflow-y-auto">
               <SettingsToc groups={filteredGroups} activePrefix={activePrefix} />
+            </div>
 
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1" onClick={handleExport}>
-                  <DownloadIcon className="mr-1.5 size-3.5" />
-                  Export
+            <div className="flex shrink-0 gap-2">
+              <Button variant="outline" size="sm" className="flex-1" onClick={handleExport}>
+                <DownloadIcon className="mr-1.5 size-3.5" />
+                Export
+              </Button>
+              <label className="flex-1">
+                <Button variant="outline" size="sm" className="w-full" asChild>
+                  <span>
+                    <UploadIcon className="mr-1.5 size-3.5" />
+                    Import
+                  </span>
                 </Button>
-                <label className="flex-1">
-                  <Button variant="outline" size="sm" className="w-full" asChild>
-                    <span>
-                      <UploadIcon className="mr-1.5 size-3.5" />
-                      Import
-                    </span>
-                  </Button>
-                  <input type="file" accept=".json" className="hidden" onChange={handleImport} />
-                </label>
-              </div>
+                <input type="file" accept=".json" className="hidden" onChange={handleImport} />
+              </label>
             </div>
           </aside>
         )}
