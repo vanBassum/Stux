@@ -256,6 +256,8 @@ export default function SettingsPage() {
                 />
               </div>
 
+              <SettingsToc groups={filteredGroups} activePrefix={activePrefix} />
+
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" className="flex-1" onClick={handleExport}>
                   <DownloadIcon className="mr-1.5 size-3.5" />
@@ -271,8 +273,6 @@ export default function SettingsPage() {
                   <input type="file" accept=".json" className="hidden" onChange={handleImport} />
                 </label>
               </div>
-
-              <SettingsToc groups={filteredGroups} activePrefix={activePrefix} />
             </div>
           </aside>
         )}
