@@ -274,7 +274,7 @@ export default function SettingsPage() {
 
       {/* JSON editor modal */}
       <Dialog open={jsonOpen} onOpenChange={setJsonOpen}>
-        <DialogContent className="flex h-[80vh] flex-col sm:max-w-3xl">
+        <DialogContent className="flex h-[80vh] flex-col sm:max-w-5xl">
           <DialogHeader>
             <DialogTitle>Edit Settings as JSON</DialogTitle>
           </DialogHeader>
