@@ -70,6 +70,7 @@ export default function SettingsPage() {
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [activePrefix, setActivePrefix] = useState<string | null>(null)
+  const [search, setSearch] = useState("")
 
   useEffect(() => {
     if (connection !== "connected") return
@@ -134,6 +135,18 @@ export default function SettingsPage() {
   }
 
   const groups = groupSettings(settings)
+  const filteredGroups = search.trim()
+    ? groups
+        .map((g) => ({
+          ...g,
+          items: g.items.filter(
+            (s) =>
+              s.label.toLowerCase().includes(search.toLowerCase()) ||
+              s.key.toLowerCase().includes(search.toLowerCase()),
+          ),
+        }))
+        .filter((g) => g.items.length > 0)
+    : groups
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -170,8 +183,10 @@ export default function SettingsPage() {
             <div className="rounded-xl border bg-card text-card-foreground shadow-sm">
               <p className="p-6 text-sm text-muted-foreground">Loading...</p>
             </div>
+          ) : filteredGroups.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No settings match "{search}".</p>
           ) : (
-            groups.map((group) => (
+            filteredGroups.map((group) => (
               <div
                 key={group.prefix}
                 id={`settings-${group.prefix}`}
@@ -201,11 +216,20 @@ export default function SettingsPage() {
           )}
         </div>
 
-        {/* ToC — only visible on wide screens */}
+        {/* Sidebar — only visible on wide screens */}
         {groups.length > 0 && (
           <aside className="hidden w-48 shrink-0 xl:block">
-            <div className="sticky top-14 pt-6">
-              <SettingsToc groups={groups} activePrefix={activePrefix} />
+            <div className="sticky top-14 space-y-4 pt-6">
+              <div className="relative">
+                <SearchIcon className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+                <Input
+                  className="pl-8 text-sm"
+                  placeholder="Search…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              <SettingsToc groups={filteredGroups} activePrefix={activePrefix} />
             </div>
           </aside>
         )}
