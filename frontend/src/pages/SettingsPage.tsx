@@ -183,9 +183,12 @@ export default function SettingsPage() {
     <div className="mx-auto flex h-full max-w-5xl flex-col">
       {/* Header */}
       <div className="shrink-0 pb-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold">Settings</h1>
-          <div className="flex gap-2">
+          {dirty && (
+            <p className="flex-1 text-sm text-amber-500">Unsaved changes — press Save to write to flash.</p>
+          )}
+          <div className="ml-auto flex gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -245,11 +248,6 @@ export default function SettingsPage() {
               ))
             )}
 
-            {dirty && (
-              <p className="text-sm text-amber-500">
-                You have unsaved changes. Press Save to write them to flash.
-              </p>
-            )}
           </div>
         </div>
 
@@ -276,7 +274,7 @@ export default function SettingsPage() {
 
       {/* JSON editor modal */}
       <Dialog open={jsonOpen} onOpenChange={setJsonOpen}>
-        <DialogContent className="flex h-[80vh] max-w-3xl flex-col">
+        <DialogContent className="fixed inset-4 flex h-auto w-auto max-w-none translate-x-0 translate-y-0 flex-col bg-background" style={{ top: "1rem", left: "1rem", right: "1rem", bottom: "1rem", width: "auto", transform: "none" }}>
           <DialogHeader>
             <DialogTitle>Edit Settings as JSON</DialogTitle>
           </DialogHeader>
